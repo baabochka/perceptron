@@ -112,6 +112,36 @@ if version == 'naive':
             break;
     print(f"Min loss: {min_loss}")
     print(w)
-else:
-    while(updated):
+elif version == 'pocket':
+    while (updated):
         updated = False
+        prev_loss = loss_fn()
+        print(f"Iteration {count}: LOSS: {loss_fn()}")
+        for i in range(datasize):
+            res = y[i] * np.dot(w, x[i])
+            if res <= 0:
+                w = w + y[i] * x[i]
+                updated = True
+                break
+        count = count + 1
+        new_loss = loss_fn()
+        loss_diff = new_loss - prev_loss
+        if loss_diff < 0:
+            loss_diff = loss_diff * (-1)
+        if min_loss > new_loss and count < datasize * MAXITER * 0.6:  # 10000
+            min_loss = new_loss
+        if min_loss < 0.05:
+            print(f"Iteration {count}: LOSS: {new_loss}")
+            break;
+        if loss_diff < eps and count > datasize * MAXITER * 0.3:  # 5000
+            print(f"Iteration {count}: LOSS: {new_loss}")
+            break;
+        if count >= datasize * MAXITER * 0.6 and new_loss < min_loss:  # 10000
+            print(f"Iteration {count}: LOSS: {new_loss}")
+            min_loss = new_loss
+            break;
+        if count > datasize * MAXITER:  # 15000
+            print(f"Iteration {count}: LOSS: {new_loss}")
+            break;
+    print(f"Min loss: {min_loss}")
+    print(w)
