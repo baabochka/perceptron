@@ -2,24 +2,25 @@ import csv
 import numpy as np
 import sys
 import getopt
-
+import timeit
+import random
 
 version = "naive"
 filename = ""
 datasize = 0
-MAXITER = 30
+MAXITER = 500
 
-bias = 0.01
-eps = 0.001
-
-x = np.zeros((569,5))
-y = np.zeros((569,1))
+bias = 0.2
+eps = 0.5
+etta = 0.1
 w = np.zeros((1,5))
-w_pok = np.zeros((1,5))
+w_best = np.zeros((1,5))
+
+start = timeit.default_timer() # start time of the program
 
 # read arguments from command line
 try:  
-    arguments, values = getopt.getopt(sys.argv[1:], 'hv:d:', ["help","version=","dataset="])
+    arguments, values = getopt.getopt(sys.argv[1:], 'hv:d:b:e:n:m:', ["help","version=","dataset=","bias=","eps=","etta=","maxiter="])
 except getopt.error as err:  
     # output error, and return with an error code
     print (str(err))
@@ -38,12 +39,23 @@ for currentArgument, currentValue in arguments:
     elif currentArgument in ("-d", "--dataset"):
         print (("dataset filename: (%s)") % (currentValue))
         filename = currentValue
+    elif currentArgument in ("-b", "--bias"):
+        bias = float(currentValue)
+        print("bias = ", bias)
+    elif currentArgument in ("-e", "--eps"):
+        eps = float(currentValue)
+        print("eps = ", eps)
+    elif currentArgument in ("-n", "--etta"):
+        etta = float(currentValue)
+        print("etta = ", etta)
+    elif currentArgument in ("-m", "--maxiter"):
+        MAXITER = float(currentValue)
+        print("MAXITER = ", MAXITER)
 
-
-def loss_fn():
+def loss_fn(test_w):
     count = 0
     for i in range(datasize):
-        value = np.dot(w, x[i]) + bias
+        value = np.dot(test_w, x[i]) + bias
         if value >= 0:
             value = 1
         else:
@@ -51,13 +63,46 @@ def loss_fn():
         if value != y[i]:
             count = count + 1
     return count / datasize*1.0
+
+def rand_order():
+    r = random.randint(0, datasize-1)
+    while(True):
+        if (Var.ind[r] == 0):
+            Var.ind[r] = 1
+            Var.size = Var.size + 1
+            return r
+        else:
+            if Var.size == datasize:
+                Var.size = 0
+                Var.ind = np.zeros((datasize, 1))
+                return -1
+            r = random.randint(0, datasize - 1)
+try:
+    with open(filename) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        line_count = 0
+        for row in csv_reader:
+            line_count += 1
+        datasize = line_count - 1
+except IOError:
+    print('An error occured trying to read the file.')
+    sys.exit(-1)
+
+x = np.zeros((datasize,5))
+y = np.zeros((datasize,1))
+
+class Var:
+    size = 0
+    r = -1
+    ind = np.zeros((datasize, 1))
+
 try:
     with open(filename) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         line_count = 0
         for row in csv_reader:
             if line_count == 0:
-                print(f'Column names are {", ".join(row)}')
+                # print(f'Column names are {", ".join(row)}')
                 line_count += 1
             else:
                 x[line_count - 1][0] = float(row[0])
@@ -70,78 +115,60 @@ try:
                 else:
                     y[line_count - 1] = float(row[5])
                 line_count += 1
-        datasize = line_count - 1
 except IOError:
     print('An error occured trying to read the file.')
     sys.exit(-1)
 
-updated = True
-count = 1
-min_loss = 1
 
 if version == 'naive':
-    while(updated):
-        updated = False
-        prev_loss = loss_fn()
-        print(f"Iteration {count}: LOSS: {loss_fn()}")
-        for i in range(datasize):
+    count = 1
+
+    while(count < MAXITER):
+        while(True):
+            i = rand_order()
+            if i == -1:
+                break
             res = y[i] * np.dot(w,x[i])
             if res <= 0:
                 w = w + y[i] * x[i]
-                updated = True
-                break
-        count = count + 1
-        new_loss = loss_fn()
-        loss_diff = new_loss - prev_loss
-        if loss_diff < 0:
-            loss_diff = loss_diff * (-1)
-        if min_loss > new_loss and count < datasize*MAXITER*0.6: #10000
-            min_loss = new_loss
-        if min_loss < 0.05:
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            break;
-        if loss_diff < eps and count > datasize*MAXITER*0.3: #5000
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            break;
-        if count >= datasize*MAXITER*0.6 and new_loss < min_loss: #10000
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            min_loss = new_loss
-            break;
-        if count > datasize*MAXITER: #15000
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            break;
-    print(f"Min loss: {min_loss}")
+
+        count += 1
+
+        if count % 100 == 0:
+            print(f"Iteration {count}: LOSS: {loss_fn(w)}")
+    print(f"Empirical risk minimization: {loss_fn(w)}")
     print(w)
+
 elif version == 'pocket':
-    while (updated):
-        updated = False
-        prev_loss = loss_fn()
-        print(f"Iteration {count}: LOSS: {loss_fn()}")
-        for i in range(datasize):
-            res = y[i] * np.dot(w, x[i])
-            if res <= 0:
-                w = w + y[i] * x[i]
-                updated = True
+    count = 1
+    best_run = 0
+    cur_run = 0
+
+    while (count < MAXITER):
+
+        while (True):
+            i = rand_order()
+            if i == -1:
                 break
-        count = count + 1
-        new_loss = loss_fn()
-        loss_diff = new_loss - prev_loss
-        if loss_diff < 0:
-            loss_diff = loss_diff * (-1)
-        if min_loss > new_loss and count < datasize * MAXITER * 0.6:  # 10000
-            min_loss = new_loss
-        if min_loss < 0.05:
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            break;
-        if loss_diff < eps and count > datasize * MAXITER * 0.3:  # 5000
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            break;
-        if count >= datasize * MAXITER * 0.6 and new_loss < min_loss:  # 10000
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            min_loss = new_loss
-            break;
-        if count > datasize * MAXITER:  # 15000
-            print(f"Iteration {count}: LOSS: {new_loss}")
-            break;
-    print(f"Min loss: {min_loss}")
-    print(w)
+            res = y[i] * np.dot(w, x[i])
+            if res > 0:
+                cur_run += 1
+                if cur_run > best_run:
+                    best_run = cur_run
+                    w_best = w
+            else:
+                w = w + etta * x[i] * y[i]
+                cur_run = 0
+
+        count += 1
+
+        if count % 100 == 0:
+            print(f"Iteration {count}: LOSS: {loss_fn(w)}")
+            print(f"Iteration {count}: BEST LOSS: {loss_fn(w_best)}")
+    print(f"Empirical risk minimization: {loss_fn(w_best)}")
+    print(w_best)
+
+# time of the program ends
+stop = timeit.default_timer()
+
+print('Time: ', stop - start)
