@@ -10,17 +10,16 @@ filename = ""
 datasize = 0
 MAXITER = 500
 
-bias = 0.2
-eps = 0.5
+bias = 1
 etta = 0.1
-w = np.zeros((1,5))
-w_best = np.zeros((1,5))
+w = np.zeros((1,6))
+w_best = np.zeros((1,6))
 
 start = timeit.default_timer() # start time of the program
 
 # read arguments from command line
 try:  
-    arguments, values = getopt.getopt(sys.argv[1:], 'hv:d:b:e:n:m:', ["help","version=","dataset=","bias=","eps=","etta=","maxiter="])
+    arguments, values = getopt.getopt(sys.argv[1:], 'hv:d:b:n:m:', ["help","version=","dataset=","bias=","etta=","maxiter="])
 except getopt.error as err:  
     # output error, and return with an error code
     print (str(err))
@@ -35,6 +34,9 @@ for currentArgument, currentValue in arguments:
         print ("Usage:")
         print("-v or --version to select [naive] or [pocket] perceptron")
         print("-d or --dataset to use [datasetname]")
+        print("-b or --bias to enter bias")
+        print("-n or --etta to enter etta")
+        print("-m or --MAXITER to set maximum number of iterations")
         print("-h or --help to print this menu") 
     elif currentArgument in ("-d", "--dataset"):
         print (("dataset filename: (%s)") % (currentValue))
@@ -42,9 +44,6 @@ for currentArgument, currentValue in arguments:
     elif currentArgument in ("-b", "--bias"):
         bias = float(currentValue)
         print("bias = ", bias)
-    elif currentArgument in ("-e", "--eps"):
-        eps = float(currentValue)
-        print("eps = ", eps)
     elif currentArgument in ("-n", "--etta"):
         etta = float(currentValue)
         print("etta = ", etta)
@@ -55,7 +54,7 @@ for currentArgument, currentValue in arguments:
 def loss_fn(test_w):
     count = 0
     for i in range(datasize):
-        value = np.dot(test_w, x[i]) + bias
+        value = np.dot(test_w, x[i])
         if value >= 0:
             value = 1
         else:
@@ -88,8 +87,10 @@ except IOError:
     print('An error occured trying to read the file.')
     sys.exit(-1)
 
-x = np.zeros((datasize,5))
+x = np.zeros((datasize,6))
 y = np.zeros((datasize,1))
+w[0] = bias
+w_best[0] = bias
 
 class Var:
     size = 0
@@ -105,11 +106,12 @@ try:
                 # print(f'Column names are {", ".join(row)}')
                 line_count += 1
             else:
-                x[line_count - 1][0] = float(row[0])
-                x[line_count - 1][1] = float(row[1])
-                x[line_count - 1][2] = float(row[2])
-                x[line_count - 1][3] = float(row[3])
-                x[line_count - 1][4] = float(row[4])
+                x[line_count - 1][0] = 1
+                x[line_count - 1][1] = float(row[0])
+                x[line_count - 1][2] = float(row[1])
+                x[line_count - 1][3] = float(row[2])
+                x[line_count - 1][4] = float(row[3])
+                x[line_count - 1][5] = float(row[4])
                 if float(row[5]) < 1:
                     y[line_count - 1] = -1
                 else:
