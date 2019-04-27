@@ -1,11 +1,10 @@
 import csv
 import numpy as np
-import pandas as pd
 import sys
 import getopt
 import timeit
 import math
-from numpy import linalg as LA
+
 
 
 filename = ""
@@ -47,7 +46,6 @@ for currentArgument, currentValue in arguments:
         reshuffle = 1
         print("Let's reshuffle the dataset")
 
-# function to calculate information gain
 
 
 # convert string values in columns to ints
@@ -71,11 +69,206 @@ def stringToInt(input, i_type):
     return output
 
 
-def calculate_entropy(probs):
+def calculate_entropy(probabilities):
     entr = 0
-    for p in probs:
-        entr += p * math.log2(p)
+    for p in probabilities:
+        if p != 0:
+            entr += p * math.log2(p)
     return -1 * entr
+
+# calculate size of each feature set and corresponding labels
+def calculate_size_split(feature_vector, label_vector):
+    c, s = extract_categories(feature_vector)
+    if len(s) == 0:
+        feature = np.zeros((len(c),1))
+    else:
+        feature = np.zeros((len(s), 1))
+    label = np.zeros((len(c),2))
+    if len(s) == 0:
+        for f in range(len(feature_vector)):
+            i = 0
+            while i < len(c):
+                if feature_vector[f] == c[i]:
+                    feature[i] += 1
+                    if label_vector[0][f] == 0:
+                        label[i][0] += 1
+                    else:
+                        label[i][1] += 1
+                i += 1
+    else:
+        for f in range(len(feature_vector)):
+            i = 1
+            while i < len(s):
+                if s[i-1] < feature_vector[f] <= s[i]:
+                    feature[i-1] += 1
+                    if label_vector[0][f] == 0:
+                        label[i-1][0] += 1
+                    else:
+                        label[i-1][1] += 1
+                i += 1
+
+    return feature, label
+
+def survival_proportions(label_vector):
+    surv = [0,0] # [not survived, survived]
+
+    for l in range(len(label_vector[0])):
+        if label_vector[0][l] == 0:
+            surv[0] += 1
+        else:
+            surv[1] += 1
+    return surv
+
+def decisionTree(data, labels, category, depth):
+    l_set = []
+    print("DEPTH: ", depth)
+    print("LSET = ", l_set)
+    for i in range(len(labels)):
+        if labels[i] not in l_set:
+            l_set.append(labels[i])
+    print("LSET = ", l_set)
+    if len(l_set) == 1:
+        print("We reached the leaf at category ", category)
+        return "leaf"
+    if depth == 3:
+        print("We created the leaf at category ", category)
+        return "too long, let's stop"
+    max_inf_gain = -1
+    feature_index = -1
+    c = 0
+
+    s = 0
+    for i in range(len(data[0])):
+        categories, separators = extract_categories(data[:,i])
+        c = len(categories)
+        s = len(separators)
+        tmp_gain = find_ig(data[:,i], np.transpose(labels), categories, separators)
+        print("IG on feature ", i, " is equal to ", tmp_gain)
+        if tmp_gain > max_inf_gain:
+            max_inf_gain = tmp_gain
+            feature_index = i
+            if len(separators) == 0:
+                split = separators
+            else:
+                split = categories
+    print("Here is the max info gain over all the features", max_inf_gain, " on index ", feature_index)
+
+    split = s
+    if s == 0:
+        split = c
+    print("DATA LENGTH = ", len(data), " DATA ", data)
+    for i in range(split):
+        splitted_data, splitted_label = split_data(data, labels,feature_index)
+        decisionTree(splitted_data[i], splitted_label[i], feature_index, depth + 1)
+
+    print("Here is the max info gain over all the features", max_inf_gain, " on index ", feature_index)
+    print("Data length-- ", len(data[0]))
+
+# function to split dataset by category feat
+def split_data(data, labels, col):
+    c,s = extract_categories(data[:,col])
+    feature, label = calculate_size_split(data[:,col], np.transpose(labels))
+    print("CS === ", c, "   ", s)
+    data_cat = []
+    label_cat = []
+    index_cat = []
+    index_cat_counter = []
+    cat_number = 0
+    if len(s) == 0:
+        cat_number = len(c)
+    else:
+        cat_number = len(s) - 1
+
+    for m in range(cat_number):
+        data_cat.append(np.zeros((int(feature[m][0]),7)))
+        label_cat.append(np.zeros((int(feature[m][0]),1)))
+        index_cat.append(int(feature[m][0]))
+        index_cat_counter.append(0)
+
+    if len(s) == 0:
+        ind = 0
+        for row in data:
+            i = 0
+            while i < len(c):
+                if row[col] == c[i]:
+                    data_cat[i][index_cat_counter[i]] = row
+                    label_cat[i][index_cat_counter[i]] = labels[ind]
+                    index_cat_counter[i] += 1
+                i += 1
+            ind += 1
+    else:
+        ind = 0
+        for row in data:
+            i = 0
+            print("s[i-1]  ",s[i-1]," < row[col] ", row[col], " <= s[i] ", s[i], "i-1 = ", i-1)
+            while i < len(c):
+                if s[i-1] < row[col] <= s[i]:
+                    data_cat[i-1][index_cat_counter[i]] = row
+                    label_cat[i-1][index_cat_counter[i]] = labels[ind]
+                    index_cat_counter[i-1] += 1
+                i += 1
+            ind += 1
+    return data_cat, label_cat
+
+
+
+# function for finding information gain for a certain feature
+def find_ig(feature_vector, label_vector, categories, separators):
+
+    total_category = 0
+    cond_entropy = 0
+    total_label_for_feature = []
+    surv = survival_proportions(label_vector)
+
+    target_entr = calculate_entropy([surv[1] / len(label_vector[0]), surv[0] / len(label_vector[0])])
+
+    feature, label = calculate_size_split(feature_vector, label_vector)
+
+    if len(separators) == 0:
+        cat_number = len(categories)
+    else:
+        cat_number = len(separators) - 1
+
+    for i in range(cat_number):
+        total_category += feature[i]
+    for i in range(cat_number):
+        total_label_for_feature.append(label[i][0] + label[i][1])
+    for i in range(cat_number):
+        cond_entropy += ((label[i][0] + label[i][1]) / total_category) * calculate_entropy([label[i][0]/total_label_for_feature[i], label[i][1]/total_label_for_feature[i]])
+
+    return target_entr - cond_entropy
+
+# find distinct categories among the column (and separators if data is not discrete
+def extract_categories(feature_vector):
+    categories = []
+    separators = []
+    for i in range(len(feature_vector)):
+        if feature_vector[i] not in categories:
+            categories.append(feature_vector[i])
+    categories.sort()
+    if len(categories) > 8:
+        separators.extend([np.percentile(feature_vector, 0)-0.5, np.percentile(feature_vector, 25), np.percentile(feature_vector, 50), np.percentile(feature_vector, 75), np.percentile(feature_vector, 100)])
+    return categories, separators
+
+
+class Tree(object):
+    def __init__(self):
+        self.left = None
+        self.child = []
+        self.data = []
+        self.name = ""
+
+    def createChildren(self, amount):
+        for i in range(0, amount):
+            self.child.append(Tree())
+
+    def setChildrenValues(self, list):
+        for i in range(0, len(list)):
+            self.data.append(list[i])
+
+    def setName(self, name):
+        self.name = name
+
 
 
 # open a file to calculate datasize
@@ -95,9 +288,9 @@ except IOError:
 datasize = size - 1
 size60 = int(datasize * 0.6)
 size40 = datasize - size60
-x60 = np.zeros((size60,8))
+x60 = np.zeros((size60,7))
 y60 = np.zeros((size60,1))
-x40 = np.zeros((size40,8))
+x40 = np.zeros((size40,7))
 y40 = np.zeros((size40,1))
 z = []
 #open the file and fill the data into vectors splitting it into 60% and 40%
@@ -154,80 +347,37 @@ stop = timeit.default_timer()
 print('Time: ', stop - start)
 print('Size: ', size)
 
-entropy_surv = 0
-surv = 0
-surv_not = 0
-prob_surv = []
-prob_surv1 = []
-c1 = 0
-c2 = 0
-c3 = 0
-y1c1 = 0
-y0c1 = 0
-y1c2 = 0
-y0c2 = 0
-y1c3 = 0
-y0c3 = 0
-
-# function for finding information gain for a certain feature
-def find_ig(feature_vector, label_vector, categories, separators):
-    surv_not = 0
-    surv = 0
-    flag = 0
-    i = 0
-    feature = np.zeros((len(categories),1))
-    label = np.zeros((len(categories),2))
-    total_category = 0
-    cond_entropy = 0
-    total_label_for_feature = []
-    for l in range(len(label_vector[0])):
-        if label_vector[0][l] == 0:
-            surv_not += 1
-        else:
-            surv += 1
-    target_entr = calculate_entropy([surv / len(label_vector[0]), surv_not / len(label_vector[0])])
-    if len(separators) == 0:
-        for f in range(len(feature_vector)):
-            i = 0
-            while i < len(categories):
-                # print("feature_vector[f]  ",feature_vector[f], " categories[i] ", categories[i], " label_vector[f] ", label_vector[0][f], " i=", i)
-                if feature_vector[f] == categories[i]:
-                    feature[i] += 1
-                    if label_vector[0][f] == 0:
-                        label[i][0] += 1
-                    else:
-                        label[i][1] += 1
-                i += 1
-    else:
-        for f in range(len(feature_vector)):
-            i = 1
-            while i < len(separators):
-                # print("feature_vector[f]  ",feature_vector[f], " separators[i] ", separators[i], " label_vector[f] ", label_vector[0][f], " i=", i)
-                if separators[i-1] < feature_vector[f] <= separators[i]:
-                    feature[i-1] += 1
-                    if label_vector[0][f] == 0:
-                        label[i-1][0] += 1
-                    else:
-                        label[i-1][1] += 1
-                i += 1
-
-    for i in range(len(categories)):
-        total_category += feature[i]
-
-    for i in range(len(categories)):
-        total_label_for_feature.append(label[i][0] + label[i][1])
-
-    for i in range(len(categories)):
-        cond_entropy += ((label[i][0] + label[i][1]) / total_category) * calculate_entropy([label[i][0]/total_label_for_feature[i], label[i][1]/total_label_for_feature[i]])
-
-    return target_entr - cond_entropy
 
 
-a = find_ig(x60[:,2], np.transpose(y60), [1,2,3], [0,30,60,90])
-print("Please, find an IG correct: ", a)
-b = find_ig(x60[:,0], np.transpose(y60), [1,2,3], [])
-print("Please, find an IG correct: ", b)
 
+root = Tree()
+root.createChildren(3)
+root.setChildrenValues([5, 6, 7])
+
+root.child[0].createChildren(2)
+root.child[0].setChildrenValues([1, 2])
+
+# print some values in the tree
+print(root.data[0])
+print(root.child[0].data[0])
+print("---------")
+# decisionTree(x60, y60,0,0)
+print("---------")
+d,l = split_data(x60,y60,5)
+print(d[0][0], d[0][1])
+# print(np.transpose(l[0]))
+# print(np.transpose(l[1]))
+# print(np.transpose(l[2]))
+
+# print(x60)
+
+# print("D0 = ", d[0])
+
+
+# print("y60 ", np.transpose(y60))
+# print("L0 = ", np.transpose(l[0]))
+d1,l1 = split_data(d[0],l[0],1)
+print(d1[0][0],d1[1][0])
 # print("LEN: ", len(label_vector[0]))
 # print("SURV: ", surv, " SURV_NOT: ", surv_not, " LEN: ", len(label_vector[0]))
 # print("surv/len(label_vector[0]) = ", surv / len(label_vector[0]), " surv_not/len(label_vector[0]) = ",
