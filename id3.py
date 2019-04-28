@@ -5,20 +5,42 @@ import getopt
 import timeit
 import math
 
+class Tree(object):
+    def __init__(self):
+        self.left = None
+        self.child = []
+        self.data = []
+        self.name = ""
 
+    def createChildren(self, amount):
+        for i in range(0, amount):
+            self.child.append(Tree())
+
+    def setChildrenValues(self, list):
+        for i in range(0, len(list)):
+            self.data.append(list[i])
+
+    def setName(self, name):
+        self.name = name
+
+    def setData(self, data):
+        self.data = data
+
+
+derevo = Tree()
 
 filename = ""
 datasize = 0
 have_ig = 1
-
-train = 0
+tree_depth = 6
 reshuffle = 0
-
+sep_age = [0, 15, 25, 40, 60, 100]
+sep_fare = [-1, 20, 100, 550]
 start = timeit.default_timer() # start time of the program
 
 # read arguments from command line
 try:
-    arguments, values = getopt.getopt(sys.argv[1:], 'hd:ntr', ["help","dataset=","train","test","reshuffle"])
+    arguments, values = getopt.getopt(sys.argv[1:], 'hd:t:r', ["help","dataset=","tree","reshuffle"])
 except getopt.error as err:
     # output error, and return with an error code
     print (str(err))
@@ -30,18 +52,14 @@ for currentArgument, currentValue in arguments:
         print ("Usage:")
         print("-h or --help to print this menu")
         print("-d or --dataset to use [datasetname]")
-        print("-n or --train to train algorithm on a 60% of a dataset")
-        print("-t or --test to test algorithm on a 40% of a dataset")
+        print("-t or --tree to set decision tree depth")
 
     elif currentArgument in ("-d", "--dataset"):
         print (("dataset filename: (%s)") % (currentValue))
         filename = currentValue
-    elif currentArgument in ("-n", "--train"):
-        train = 1
-        print("Let's train the algorithm")
-    elif currentArgument in ("-t", "--test"):
-        train = 0
-        print("Let's test the algorithm")
+    elif currentArgument in ("-t", "--tree"):
+        tree_depth = int(currentValue)
+        print("DEPTH set to ", tree_depth)
     elif currentArgument in ("-r", "--reshuffle"):
         reshuffle = 1
         print("Let's reshuffle the dataset")
@@ -50,8 +68,17 @@ for currentArgument, currentValue in arguments:
 
 # convert string values in columns to ints
 def stringToInt(input, i_type):
-    if input == '' and i_type == 'age':
-        output = 26
+    output = -1
+    if i_type == 'age':
+        if input == '':
+            input = 26
+        for i in range(1, len(sep_age)+1):
+            if sep_age[i-1] < float(input) <= sep_age[i]:
+                output = round((sep_age[i] + sep_age[i-1])/2)
+    elif i_type == 'fare':
+        for i in range(1, len(sep_fare)+1):
+            if sep_fare[i - 1] < float(input) <= sep_fare[i]:
+                output = round((sep_fare[i] - sep_fare[i - 1]) / 2)
     elif input == '':
         output = 0
     elif input == 'C':
@@ -119,56 +146,74 @@ def survival_proportions(label_vector):
             surv[1] += 1
     return surv
 
-def decisionTree(data, labels, category, depth):
+def majorLabel(labels):
+    l1 = 0
+    l0 = 0
+    for i in range(len(labels)):
+        if labels[i] == 0:
+            l0 += 1
+        else:
+            l1 += 1
+    if l0 > l1:
+        return 0
+    else:
+        return 1
+
+
+
+
+def dT(data, labels, column, depth):
     l_set = []
-    print("DEPTH: ", depth)
-    print("LSET = ", l_set)
+    cat = []
+    split = 0
     for i in range(len(labels)):
         if labels[i] not in l_set:
             l_set.append(labels[i])
-    print("LSET = ", l_set)
     if len(l_set) == 1:
-        print("We reached the leaf at category ", category)
-        return "leaf"
-    if depth == 3:
-        print("We created the leaf at category ", category)
-        return "too long, let's stop"
+        # print("We reached the leaf at category ", column)
+        # print(majorLabel(labels))
+        der = Tree()
+        der.setData((majorLabel(labels)))
+        # print("LEAF: ", der.data)
+        return der
+    if depth == tree_depth:
+        der = Tree()
+        der.setData((majorLabel(labels)))
+        # print("LEAF: ", der.data)
+        return der
+
+    # print("LEVELS LEN: ", len(levels))
+    # print("DEPTH ", depth)
+    #
+    #
+    # print("data size: ", len(data))
     max_inf_gain = -1
     feature_index = -1
-    c = 0
-
-    s = 0
     for i in range(len(data[0])):
         categories, separators = extract_categories(data[:,i])
         c = len(categories)
-        s = len(separators)
         tmp_gain = find_ig(data[:,i], np.transpose(labels), categories, separators)
-        print("IG on feature ", i, " is equal to ", tmp_gain)
+        # print("IG on feature ", i, " is equal to ", tmp_gain)
         if tmp_gain > max_inf_gain:
             max_inf_gain = tmp_gain
             feature_index = i
-            if len(separators) == 0:
-                split = separators
-            else:
-                split = categories
-    print("Here is the max info gain over all the features", max_inf_gain, " on index ", feature_index)
+            split = c
+            cat = categories
+    # print("Here is the max info gain over all the features", max_inf_gain, " on index ", feature_index)
 
-    split = s
-    if s == 0:
-        split = c
-    print("DATA LENGTH = ", len(data), " DATA ", data)
+    splitted_data, splitted_label = split_data(data, labels, feature_index)
+    der = Tree()
+    der.setData((cat, feature_index))
+    der.createChildren(split)
     for i in range(split):
-        splitted_data, splitted_label = split_data(data, labels,feature_index)
-        decisionTree(splitted_data[i], splitted_label[i], feature_index, depth + 1)
+        der.child[i] = dT(splitted_data[i], splitted_label[i], feature_index, depth + 1)
+    return der
 
-    print("Here is the max info gain over all the features", max_inf_gain, " on index ", feature_index)
-    print("Data length-- ", len(data[0]))
 
 # function to split dataset by category feat
 def split_data(data, labels, col):
     c,s = extract_categories(data[:,col])
     feature, label = calculate_size_split(data[:,col], np.transpose(labels))
-    print("CS === ", c, "   ", s)
     data_cat = []
     label_cat = []
     index_cat = []
@@ -199,12 +244,12 @@ def split_data(data, labels, col):
     else:
         ind = 0
         for row in data:
-            i = 0
-            print("s[i-1]  ",s[i-1]," < row[col] ", row[col], " <= s[i] ", s[i], "i-1 = ", i-1)
-            while i < len(c):
+            i = 1
+
+            while i < len(s):
                 if s[i-1] < row[col] <= s[i]:
-                    data_cat[i-1][index_cat_counter[i]] = row
-                    label_cat[i-1][index_cat_counter[i]] = labels[ind]
+                    data_cat[i-1][index_cat_counter[i-1]] = row
+                    label_cat[i-1][index_cat_counter[i-1]] = labels[ind]
                     index_cat_counter[i-1] += 1
                 i += 1
             ind += 1
@@ -251,23 +296,6 @@ def extract_categories(feature_vector):
     return categories, separators
 
 
-class Tree(object):
-    def __init__(self):
-        self.left = None
-        self.child = []
-        self.data = []
-        self.name = ""
-
-    def createChildren(self, amount):
-        for i in range(0, amount):
-            self.child.append(Tree())
-
-    def setChildrenValues(self, list):
-        for i in range(0, len(list)):
-            self.data.append(list[i])
-
-    def setName(self, name):
-        self.name = name
 
 
 
@@ -310,7 +338,7 @@ try:
                 x60[index][2] = stringToInt(row[5],'age')   # Age (blank = 0 for now)
                 x60[index][3] = float(row[6])         # SibSp
                 x60[index][4] = float(row[7])         # Parch
-                x60[index][5] = float(row[9])         # Fare
+                x60[index][5] = stringToInt(float(row[9]), 'fare')         # Fare
                 x60[index][6] = stringToInt(row[11], '')  # Embarked (C = 0, Q = 1, S = 2)
                 # x[index][7] = float(row[0])       # Passenger number
                 # z.append(row[3])                  # Passenger Name
@@ -323,7 +351,7 @@ try:
                 x40[index40][2] = stringToInt(row[5], 'age')  # Age (blank = 0 for now)
                 x40[index40][3] = float(row[6])  # SibSp
                 x40[index40][4] = float(row[7])  # Parch
-                x40[index40][5] = float(row[9])  # Fare
+                x40[index40][5] = stringToInt(float(row[9]), 'fare')    # Fare
                 x40[index40][6] = stringToInt(row[11], '')  # Embarked (C = 0, Q = 1, S = 2)
                 # x[index][7] = float(row[0])       # Passenger number
                 # z.append(row[3])                  # Passenger Name
@@ -332,14 +360,6 @@ try:
 except IOError:
     print('An error occured trying to read the file.')
     sys.exit(-1)
-
-# stop1 = 0
-# print("Pclass  Sex  Age  SibSp  Parch  Fare Embarked Survived Name")
-# for i in range(size - 1):
-#     print(x40[i], y40[i], z[i])
-#     stop1 += 1
-#     if stop1 == 10:
-#         break
 
 
 stop = timeit.default_timer()
@@ -350,34 +370,98 @@ print('Size: ', size)
 
 
 
-root = Tree()
-root.createChildren(3)
-root.setChildrenValues([5, 6, 7])
+# root = Tree()
+# root.setData(["root"])
 
-root.child[0].createChildren(2)
-root.child[0].setChildrenValues([1, 2])
 
-# print some values in the tree
-print(root.data[0])
-print(root.child[0].data[0])
+# root1 = Tree()
+# root1.setData(["root"])
+# root1.createChildren(3)
+# root1.setChildrenValues([5, 6, 7])
+#
+# root1.child[0].createChildren(2)
+# root1.child[0].setChildrenValues([1, 2])
+#
+# root1.child[1].createChildren(1)
+# root1.child[1].setChildrenValues([8])
+#
+# root1.child[2].createChildren(2)
+# root1.child[2].setChildrenValues([4, 7])
+
+
+# # print some values in the tree
+# printTree(root1, root1.data, 0)
+# print(root.child[0].data[0])
+
 print("---------")
-# decisionTree(x60, y60,0,0)
+myTree = dT(x60, y60,0,0)
+
+class Var():
+    correct = 0
+    wrong = 0
+
+
+def test_data(node, test_vector, test_label):
+    # print("SIZE: ", len(test_vector))
+    # print("NODE = 1 ", node.data == 1)
+    if node.data == 1 or node.data == 0:
+        # print("NODE DATA: ", node.data)
+        if node.data == test_label:
+            Var.correct += 1
+        else:
+            Var.wrong += 1
+        return node.data
+    t = node.data[1]
+    # print("len-node-data ", len(node.data[0]))
+    for j in range(len(node.data[0])):
+        if test_row[t] == node.data[0][j]:
+            test_data(node.child[j], test_vector,test_label)
+
+
+test_index = 0
+
+for test_row in x40:
+    tmp = test_data(myTree, test_row, y40[test_index])
+    test_index += 1
+print("WRONG test: ", Var.wrong, "CORRECT test: ", Var.correct)
+
+test1_index = 0
+Var.correct = 0
+Var.wrong = 0
+for test1_row in x60:
+    tmp = test_data(myTree, test1_row, y60[test1_index])
+    test_index += 1
+print("WRONG train: ", Var.wrong, "CORRECT train: ", Var.correct)
+
+# dT(x60, y60,0,0)
+#
+# for j in range(len(levels)):
+#     print(j, "  ", levels)
+    # list_of_splits.append(levels[j])
+
+# print("LIST OF SPLITS: ", list_of_splits)
+# printTree(root, root.data, 0)
 print("---------")
-d,l = split_data(x60,y60,5)
-print(d[0][0], d[0][1])
+print("TEST DATA")
+# print(test_data(myTree))
+print("---------")
+print("---------")
+# d,l = split_data(x60,y60,5)
+# print(d[0][0], d[0][1])
 # print(np.transpose(l[0]))
+
 # print(np.transpose(l[1]))
 # print(np.transpose(l[2]))
 
-# print(x60)
+# print(extract_categories(x60[:,1]))
 
 # print("D0 = ", d[0])
 
 
 # print("y60 ", np.transpose(y60))
 # print("L0 = ", np.transpose(l[0]))
-d1,l1 = split_data(d[0],l[0],1)
-print(d1[0][0],d1[1][0])
+# d1,l1 = split_data(d[0],l[0],1)
+# print(d1[0][0],d1[1][0])
 # print("LEN: ", len(label_vector[0]))
 # print("SURV: ", surv, " SURV_NOT: ", surv_not, " LEN: ", len(label_vector[0]))
 # print("surv/len(label_vector[0]) = ", surv / len(label_vector[0]), " surv_not/len(label_vector[0]) = ",
