@@ -200,7 +200,7 @@ def dT(data, labels, column, depth):
             split = c
             cat = categories
     # print("Here is the max info gain over all the features", max_inf_gain, " on index ", feature_index)
-
+    #
     splitted_data, splitted_label = split_data(data, labels, feature_index)
     der = Tree()
     der.setData((cat, feature_index))
@@ -370,31 +370,9 @@ print('Size: ', size)
 
 
 
-# root = Tree()
-# root.setData(["root"])
-
-
-# root1 = Tree()
-# root1.setData(["root"])
-# root1.createChildren(3)
-# root1.setChildrenValues([5, 6, 7])
-#
-# root1.child[0].createChildren(2)
-# root1.child[0].setChildrenValues([1, 2])
-#
-# root1.child[1].createChildren(1)
-# root1.child[1].setChildrenValues([8])
-#
-# root1.child[2].createChildren(2)
-# root1.child[2].setChildrenValues([4, 7])
-
-
-# # print some values in the tree
-# printTree(root1, root1.data, 0)
-# print(root.child[0].data[0])
-
 print("---------")
 myTree = dT(x60, y60,0,0)
+print(myTree.child[0].data)
 
 class Var():
     correct = 0
@@ -403,9 +381,11 @@ class Var():
 
 def test_data(node, test_vector, test_label):
     # print("SIZE: ", len(test_vector))
-    # print("NODE = 1 ", node.data == 1)
+    # print("NODE = ", node.data)
+    # print("LABEL for vector ", test_vector, " is ", test_label)
     if node.data == 1 or node.data == 0:
         # print("NODE DATA: ", node.data)
+        # print("Label: ", test_label)
         if node.data == test_label:
             Var.correct += 1
         else:
@@ -414,7 +394,7 @@ def test_data(node, test_vector, test_label):
     t = node.data[1]
     # print("len-node-data ", len(node.data[0]))
     for j in range(len(node.data[0])):
-        if test_row[t] == node.data[0][j]:
+        if test_vector[t] == node.data[0][j]:
             test_data(node.child[j], test_vector,test_label)
 
 
@@ -423,50 +403,20 @@ test_index = 0
 for test_row in x40:
     tmp = test_data(myTree, test_row, y40[test_index])
     test_index += 1
-print("WRONG test: ", Var.wrong, "CORRECT test: ", Var.correct)
+print("ACCURACY_test = ",Var.correct/(Var.correct+Var.wrong), "WRONG test: ", Var.wrong, "CORRECT test: ", Var.correct)
 
 test1_index = 0
 Var.correct = 0
 Var.wrong = 0
+# print(y60)
 for test1_row in x60:
     tmp = test_data(myTree, test1_row, y60[test1_index])
-    test_index += 1
-print("WRONG train: ", Var.wrong, "CORRECT train: ", Var.correct)
-
-# dT(x60, y60,0,0)
-#
-# for j in range(len(levels)):
-#     print(j, "  ", levels)
-    # list_of_splits.append(levels[j])
-
-# print("LIST OF SPLITS: ", list_of_splits)
-# printTree(root, root.data, 0)
-print("---------")
-print("TEST DATA")
-# print(test_data(myTree))
-print("---------")
-print("---------")
-# d,l = split_data(x60,y60,5)
-# print(d[0][0], d[0][1])
-# print(np.transpose(l[0]))
-
-# print(np.transpose(l[1]))
-# print(np.transpose(l[2]))
-
-# print(extract_categories(x60[:,1]))
-
-# print("D0 = ", d[0])
+    test1_index += 1
+print("ACCURACY = ",Var.correct/(Var.correct+Var.wrong), "WRONG train: ", Var.wrong, "CORRECT train: ", Var.correct)
 
 
-# print("y60 ", np.transpose(y60))
-# print("L0 = ", np.transpose(l[0]))
-# d1,l1 = split_data(d[0],l[0],1)
-# print(d1[0][0],d1[1][0])
-# print("LEN: ", len(label_vector[0]))
-# print("SURV: ", surv, " SURV_NOT: ", surv_not, " LEN: ", len(label_vector[0]))
-# print("surv/len(label_vector[0]) = ", surv / len(label_vector[0]), " surv_not/len(label_vector[0]) = ",
-#       surv_not / len(label_vector[0]))
-#
-# print("TARG_ENTR: ", target_entr)
+srv = survival_proportions(np.transpose(y40))
+print("Simple guessing test: ", srv[0] / len(y40))
 
-
+srv = survival_proportions(np.transpose(y60))
+print("Simple guessing train: ", srv[0] / len(y60))
